@@ -1,0 +1,27 @@
+mod_geopip
+==========
+
+Introduction
+============
+
+Use maxmind's excellent geopip database to see from what area of the world your website visitors 
+are from.
+
+Installation
+============
+
+Download a recent geoip database file GeoLitecity.dat.gz from Maxmind, and place it in a directory 
+named deps/egeoip/priv
+
+The database can be downloaded from: 
+
+http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz
+
+Start the module in Zotonic's admin interface.
+
+Usage
+=====
+
+Lookup available information for ip-addreseses
+
+{{ m.geoip["80.69.73.11"] | pprint }}
