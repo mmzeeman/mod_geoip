@@ -1,7 +1,7 @@
 %% @author Maas-Maarten Zeeman <mmzeeman@xs4all.nl>
-%% @copyright 2010-2011 Channel.Me
+%% @copyright 2010-2015 Channel.Me
 
-%% Copyright 2010-2011 Channel.Me
+%% Copyright 2010-2015 Channel.Me
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -17,38 +17,45 @@
 
 -module(mod_geoip).
 -author("Maas-Maarten Zeeman <mmzeeman@xs4all.nl").
--behaviour(gen_server).
 
 -mod_title("GeoIP").
 -mod_description("Module which can be used to lookup geographical information given an ip address.").
 -mod_prio(500).
+-mod_provides([geoip]).
+-mod_depends([admin]).
 
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([start_link/1]).
+-export([
+    observe_admin_menu/3,
+
+    observe_module_activate/2,
+    observe_module_deactivate/2
+]).
 
 -include_lib("zotonic.hrl").
+-include_lib("modules/mod_admin/include/admin_menu.hrl").
 
--record(state, {}).
+observe_admin_menu(admin_menu, Acc, Context) ->
+    [#menu_item{id=admin_geoip,
+                parent=admin_modules,
+                label=?__("GeoIP", Context),
+                url={admin_geoip},
+                visiblecheck={acl, use, mod_geoip}}
+     | Acc].
 
-start_link(Args) when is_list(Args) ->
-    gen_server:start_link(?MODULE, Args, []).
+observe_module_activate(#module_activate{module=?MODULE}, _Context) ->
+    application:start(geodata2),
+    %% TODO: add code to download the databases.
+    {ok, _} = geodata2:open_base(city, "priv/GeoLite2-City.mmdb"),
+    {ok, _} = geodata2:open_base(country, "priv/GeoLite2-Country.mmdb"),
+    ok;
 
-init(_Args) ->
-    process_flag(trap_exit, true),
-    zotonic:ensure_started(egeoip),
-    {ok, #state{}}.
+observe_module_activate(_, _Context) ->
+    ok.
 
-handle_call(Message, _From, State) ->
-    {stop, {unknown_call, Message}, State}.
+observe_module_deactivate(#module_deactivate{module=?MODULE}, _Context) ->
+    application:stop(geodata2);
 
-handle_cast(Message, State) ->
-    {stop, {unknown_cast, Message}, State}.
+observe_module_deactivate(_, _Context) ->
+    ok.
 
-handle_info(_Info, State) ->
-    {noreply, State}.
 
-terminate(_Reason, _State) ->
-    application:stop(egeoip).
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.

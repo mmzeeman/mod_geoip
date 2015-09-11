@@ -26,7 +26,8 @@
 ]).
 
 -export([
-    lookup/1
+    lookup/1,
+    lookup/2
 ]).
 
 -include_lib("zotonic.hrl").
@@ -48,11 +49,20 @@ m_value(#m{value=undefined}, _Context) ->
 
 %% @doc Fetch information belonging to the ip address
 %% @spec lookup(Address) -> proplist()
+
 lookup(Address) ->
-    case egeoip:lookup_pl(Address) of 
-	{error, Mess} ->
-	    ?DEBUG({error, Mess, input, Address}),
-	    undefined;
-	PropList ->
-	    PropList
+    lookup(Address, city).
+
+lookup(Address, Db) ->
+    case inet:parse_address(Address) of
+        {ok, Ip} ->
+            case geodata2:lookup(Db, Ip) of
+                {ok, Info} ->
+                    Info;
+                {error, Reason} ->
+                    ?DEBUG(Reason),
+                    undefined
+            end;
+        {error, einval} ->
+            undefined
     end.

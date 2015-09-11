@@ -1,0 +1,5 @@
+%% -*- mode: erlang -*-
+[
+ {admin_geoip, [ "admin", "geoip" ], controller_template, [{template, "admin_geoip.tpl"}, {ssl, true}]}
+].
+
