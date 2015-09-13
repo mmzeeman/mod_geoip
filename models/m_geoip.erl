@@ -34,8 +34,12 @@
 
 %% @doc Fetch the value for the key from a model source
 %% @spec m_find_value(Key, Source, Context) -> term()
+m_find_value(DbName, #m{value=undefined}=M, _Context) when is_atom(DbName) ->
+    M#m{value=DbName};
 m_find_value(Address, #m{value=undefined}, _Context) ->
-    lookup(Address).
+    lookup(Address);
+m_find_value(Address, #m{value=DbName}, _Context) ->
+    lookup(DbName, Address).
 
 %% @doc Transform a m_config value to a list, used for template loops
 %% @spec m_to_list(Source, Context)
@@ -48,21 +52,63 @@ m_value(#m{value=undefined}, _Context) ->
    undefined.
 
 %% @doc Fetch information belonging to the ip address
-%% @spec lookup(Address) -> proplist()
-
 lookup(Address) ->
-    lookup(Address, city).
+    lookup(city, Address).
 
-lookup(Address, Db) ->
+%% @doc Fetch information belonging to the ip address from a specific database.
+lookup(Db, Address) when is_binary(Address) ->
+    lookup(Db, z_convert:to_list(Address));
+lookup(Db, Address) when is_list(Address) ->
     case inet:parse_address(Address) of
-        {ok, Ip} ->
-            case geodata2:lookup(Db, Ip) of
-                {ok, Info} ->
-                    Info;
-                {error, Reason} ->
-                    ?DEBUG(Reason),
-                    undefined
-            end;
+        {ok, IpAddress} ->
+            lookup(Db, IpAddress);
         {error, einval} ->
             undefined
+    end;
+lookup(Db, IpAddress) when is_tuple(IpAddress) ->
+    case geodata2:lookup(Db, IpAddress) of
+        {ok, Info} ->
+            make_trans_tuples(Info);
+        not_found ->
+            undefined;
+        {error, Reason} ->
+            ?DEBUG(Reason),
+            undefined
     end.
+
+%%
+%% Helpers
+%%
+
+make_trans_tuples(List) ->
+    make_trans_tuples(List, []).
+
+make_trans_tuples([], Acc) ->
+    Acc;
+make_trans_tuples([{<<"names">>, Names} | Rest], Acc) ->
+    make_trans_tuples(Rest, [{<<"name">>, make_trans_tuple(Names, [])} | Acc]);
+
+make_trans_tuples([{K,L} | Rest], Acc) when is_list(L) ->
+    T = make_trans_tuples(L),
+    make_trans_tuples(Rest, [{K, T}| Acc]);
+make_trans_tuples([H | Rest], Acc) ->
+    make_trans_tuples(Rest, [H| Acc]).
+
+
+% Transform a list of names from maxminds db to a zotonic trans tuple
+make_trans_tuple([], Acc) ->
+    {trans, Acc};
+make_trans_tuple([{Lang, Value} | Rest], Acc) ->
+    case z_trans:to_language_atom(Lang) of
+        {ok, LanguageAtom} ->
+            make_trans_tuple(Rest, [{LanguageAtom, Value} | Acc]);
+        {error, not_a_language} ->
+            % skip language
+            make_trans_tuple(Rest, Acc)
+    end.
+
+
+
+
+
+

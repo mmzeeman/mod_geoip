@@ -27,12 +27,15 @@
 -export([
     observe_admin_menu/3,
 
-    observe_module_activate/2,
-    observe_module_deactivate/2
+    observe_module_activate/2
 ]).
 
 -include_lib("zotonic.hrl").
 -include_lib("modules/mod_admin/include/admin_menu.hrl").
+
+%%
+%% Observes
+%%
 
 observe_admin_menu(admin_menu, Acc, Context) ->
     [#menu_item{id=admin_geoip,
@@ -43,19 +46,39 @@ observe_admin_menu(admin_menu, Acc, Context) ->
      | Acc].
 
 observe_module_activate(#module_activate{module=?MODULE}, _Context) ->
-    application:start(geodata2),
-    %% TODO: add code to download the databases.
-    {ok, _} = geodata2:open_base(city, "priv/GeoLite2-City.mmdb"),
-    {ok, _} = geodata2:open_base(country, "priv/GeoLite2-Country.mmdb"),
+    case zotonic:ensure_started(geodata2) of
+        ok ->
+            %% TODO: Make it possible to use other commercially available db's
+            ensure_open(city, filename:join([z_utils:lib_dir(priv), "maxmind", "GeoLite2-City.mmdb"])),
+            ensure_open(country, filename:join([z_utils:lib_dir(priv), "maxmind", "GeoLite2-Country.mmdb"]));
+        _ ->
+            ?DEBUG("Could not start geodata2. Make sure it is available.")
+    end,
+
     ok;
 
 observe_module_activate(_, _Context) ->
     ok.
 
-observe_module_deactivate(#module_deactivate{module=?MODULE}, _Context) ->
-    application:stop(geodata2);
+% NOTE: there is no observe for module deactivate. This zotonic node could
+% easily have multiple mod_geoip's activated for different sites.
 
-observe_module_deactivate(_, _Context) ->
-    ok.
+%%
+%% Helpers
+%%
 
+ensure_open(Db, File) ->
+    case filelib:is_file(File) of
+        false ->
+            ?DEBUG(["Could not find geoip db file: ", File]);
+        true ->
+            case geodata2:open_base(Db, File) of
+                {ok, _Pid} -> 
+                    ok;
+                {error, {already_started, _Pid}} -> 
+                    ok;
+                {error, Reason} ->
+                    ?DEBUG({"Could not open database", File, Reason})
+            end
+    end.
 
